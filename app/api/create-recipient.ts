@@ -14,7 +14,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     body: JSON.stringify({ type, name, account_number, bank_code, currency }),
   });
 
-  const data = await response.json();
+  const data: any = await response.json();
   if (!response.ok) return res.status(response.status).json({ error: data.message });
   return res.status(200).json({ recipient_code: data.data.recipient_code });
 }

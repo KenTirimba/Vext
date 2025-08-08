@@ -147,7 +147,7 @@ export default function ProfilePage() {
           international
           defaultCountry="KE"
           value={phone}
-          onChange={setPhone}
+          onChange={(value) => setPhone(value || '')}
           className="mt-1 block w-full"
           required
         />

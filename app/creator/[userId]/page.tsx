@@ -21,7 +21,7 @@ interface VideoDoc {
 }
 
 export default function CreatorProfilePage() {
-  const { userId } = useParams();
+  const { userId } = useParams() as { userId: string };
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [videos, setVideos] = useState<VideoDoc[]>([]);
 

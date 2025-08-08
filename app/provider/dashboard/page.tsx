@@ -39,7 +39,12 @@ export default function ProviderDashboard() {
 
       const q = query(collection(db, 'users', user.uid, 'withdrawals'), orderBy('createdAt', 'desc'));
       const snap = await getDocs(q);
-      setWithdrawals(snap.docs.map(doc => ({ id: doc.id, ...(doc.data() as Withdrawal) })));
+      setWithdrawals(
+        snap.docs.map(doc => {
+          const data = doc.data() as Withdrawal;
+          return { ...data, id: doc.id }; // place id after spread
+        })
+      );
       setLoading(false);
     })();
   }, [user]);

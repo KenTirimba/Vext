@@ -10,24 +10,24 @@ import {
 import { auth } from '../lib/firebase';
 import { createUserProfile } from '../lib/auth';
 
-interface AuthModalProps {
-  isOpen: boolean;
+export interface AuthModalProps {
+  open: boolean;
   onClose: () => void;
 }
 
-export function AuthModal({ isOpen, onClose }: AuthModalProps) {
+export const AuthModal: React.FC<AuthModalProps> = ({ open, onClose }) => {
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
   useEffect(() => {
-    document.body.style.overflow = isOpen ? 'hidden' : '';
+    document.body.style.overflow = open ? 'hidden' : '';
     return () => {
       document.body.style.overflow = '';
     };
-  }, [isOpen]);
+  }, [open]);
 
-  if (!isOpen) return null;
+  if (!open) return null;
 
   const toggleMode = () => setIsSignUp(!isSignUp);
 
@@ -113,4 +113,4 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
       </div>
     </div>
   );
-}
+};

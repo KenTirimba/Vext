@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import {
-  collection, getDocs, query, orderBy, doc, getDoc, deleteDoc,
+  collection, getDocs, query, orderBy, doc, getDoc, deleteDoc, setDoc
 } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 import { useAuthState } from 'react-firebase-hooks/auth';
@@ -112,7 +112,10 @@ export default function VideoFeed() {
     if (!user) return alert('Sign in to like');
     const ref = doc(db, 'videos', videoId, 'likes', user.uid!);
     if (likesMap[videoId]) await deleteDoc(ref);
-    else await doc(db, 'videos', videoId, 'likes', user.uid!).set({ likedAt: Date.now(), userId: user.uid } as any);
+    else await setDoc(doc(db, 'videos', videoId, 'likes', user.uid!), {
+      likedAt: Date.now(),
+      userId: user.uid
+    });
     setLikesMap(prev => ({ ...prev, [videoId]: !prev[videoId] }));
   };
 
@@ -120,7 +123,10 @@ export default function VideoFeed() {
     if (!user) return alert('Sign in to follow');
     const ref = doc(db, 'users', creatorId, 'followers', user.uid!);
     if (followMap[creatorId]) await deleteDoc(ref);
-    else await doc(db, 'users', creatorId, 'followers', user.uid!).set({ followedAt: Date.now(), userId: user.uid } as any);
+    else await setDoc(
+      doc(db, 'users', creatorId, 'followers', user.uid!),
+      { followedAt: Date.now(), userId: user.uid } as any
+    );
     setFollowMap(prev => ({ ...prev, [creatorId]: !prev[creatorId] }));
   };
 

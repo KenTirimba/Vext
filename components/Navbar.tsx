@@ -7,7 +7,11 @@ import { auth, db } from '../lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { AuthModal } from './AuthModal';
 
-export function Navbar() {
+interface NavbarProps {
+  onAuthClick?: () => void;
+}
+
+export const Navbar: React.FC<NavbarProps> = ({ onAuthClick }) => {
   const [user] = useAuthState(auth);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [authDialogOpen, setAuthDialogOpen] = useState(false);
@@ -105,7 +109,10 @@ export function Navbar() {
               </>
             ) : (
               <button
-                onClick={() => setAuthDialogOpen(true)}
+                onClick={() => {
+                  setAuthDialogOpen(true);
+                  if (onAuthClick) onAuthClick();
+                }}
                 className="block w-full px-3 py-2 hover:bg-gray-700 rounded"
               >
                 Sign In / Sign Up
@@ -115,7 +122,7 @@ export function Navbar() {
         )}
       </div>
 
-      <AuthModal isOpen={authDialogOpen} onClose={() => setAuthDialogOpen(false)} />
+      <AuthModal open={authDialogOpen} onClose={() => setAuthDialogOpen(false)} />
     </>
   );
-}
+};

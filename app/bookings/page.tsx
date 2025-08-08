@@ -8,6 +8,12 @@ import { useAuthState } from 'react-firebase-hooks/auth';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
 
+interface Booking {
+  id: string;
+  status?: string;
+  [key: string]: any; // allow extra fields
+}
+
 export default function ClientBookings() {
   const [user] = useAuthState(auth);
   const [active, setActive] = useState<any[]>([]);
@@ -21,8 +27,8 @@ export default function ClientBookings() {
     (async () => {
       const snap = await getDocs(query(collection(db, 'bookings'), where('clientId', '==', user.uid)));
       const arr = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      setActive(arr.filter(b => b.status === 'pending'));
-      setCompleted(arr.filter(b => b.status === 'confirmed'));
+      setActive((arr as Booking[]).filter(b => b.status === 'pending'));
+      setCompleted((arr as Booking[]).filter(b => b.status === 'confirmed'));
     })();
   }, [user]);
 

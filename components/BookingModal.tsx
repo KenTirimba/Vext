@@ -143,7 +143,7 @@ export default function BookingModal({ video, creator, onClose }: BookingModalPr
               international
               defaultCountry="KE"
               value={phone}
-              onChange={setPhone}
+              onChange={(value) => setPhone(value || '')}
               className="w-full mb-4"
             />
             <button onClick={handleProfileSave} className="w-full bg-blue-600 text-white py-2 rounded">
