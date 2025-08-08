@@ -76,6 +76,7 @@ export default function BookingModal({ video, creator, onClose }: BookingModalPr
   const handlePay = async () => {
     if (!profileComplete) return;
     try {
+      // Create booking in Firestore
       await addDoc(collection(db, 'bookings'), {
         clientId: user!.uid,
         providerId: video.userId,
@@ -89,8 +90,27 @@ export default function BookingModal({ video, creator, onClose }: BookingModalPr
         createdAt: Date.now(),
         clientPhone: phone,
         providerPhone: creator.phone,
+        clientName: name,
       });
 
+      // Send SMS via our API route
+      try {
+        const firstName = (name || '').split(' ').filter(Boolean)[0] || 'Client';
+        if (creator.phone) {
+          await fetch('/api/send-sms', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              to: creator.phone,
+              message: `Hi! ${firstName} just booked your service. Please check your dashboard for details.`,
+            }),
+          });
+        }
+      } catch (smsErr) {
+        console.error('Failed to send SMS notification', smsErr);
+      }
+
+      // Continue with payment
       const res = await fetch('/api/paystack/init', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

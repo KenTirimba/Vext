@@ -1,31 +1,44 @@
-export const runtime = 'nodejs';
-
-import { NextRequest, NextResponse } from 'next/server';
+// app/api/send-sms/route.ts
+import type { NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 import africastalking from 'africastalking';
 
-const AT = africastalking({
-  apiKey: process.env.AFRICASTALKING_API_KEY!,
-  username: process.env.AFRICASTALKING_USERNAME!,
-});
-
-const sms = AT.SMS;
-
 export async function POST(req: NextRequest) {
-  const { to, message } = await req.json();
-
-  if (!to || !message) {
-    return NextResponse.json({ error: 'Missing `to` or `message`' }, { status: 400 });
-  }
-
   try {
-    const result = await sms.send({
-      to,
-      from: process.env.AFRICASTALKING_FROM!,
-      message,
+    const body = await req.json() as { to?: string; message?: string };
+
+    if (!body?.to || !body?.message) {
+      return NextResponse.json({ error: 'to and message are required' }, { status: 400 });
+    }
+
+    const username = process.env.AFRICASTALKING_USERNAME;
+    const apiKey = process.env.AFRICASTALKING_API_KEY;
+
+    if (!username || !apiKey) {
+      return NextResponse.json({ error: 'Africa\'s Talking credentials not configured' }, { status: 500 });
+    }
+
+    // initialize africastalking
+    const AT = africastalking({
+      apiKey,
+      username,
     });
 
-    return NextResponse.json({ success: true, result });
+    const sms = AT.SMS;
+
+    // africastalking expects a string (comma separated allowed). ensure string
+    const to = Array.isArray(body.to) ? body.to.join(',') : body.to;
+
+    const response = await sms.send({
+      to,
+      message: body.message,
+      // from: 'Vext' // optional sender id (if configured in AT account)
+    });
+
+    // return provider response (be careful not to leak secrets in real production)
+    return NextResponse.json({ ok: true, result: response }, { status: 200 });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    console.error('send-sms error', err);
+    return NextResponse.json({ error: err?.message || 'Unknown error' }, { status: 500 });
   }
 }
