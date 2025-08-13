@@ -101,6 +101,25 @@ export default function ProfilePage() {
     alert('Profile updated');
   };
 
+  const useCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      alert('Geolocation is not supported by your browser.');
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const { latitude, longitude } = pos.coords;
+        setLat(latitude);
+        setLng(longitude);
+        alert('Location set to your current position.');
+      },
+      (err) => {
+        console.error(err);
+        alert('Unable to retrieve your location.');
+      }
+    );
+  };
+
   if (!user) return <p className="p-6">Please sign in to view this page.</p>;
 
   return (
@@ -165,12 +184,16 @@ export default function ProfilePage() {
 
       <label className="block">
         <span>Gender:</span>
-        <input
-          type="text"
+        <select
           className="mt-1 block w-full border rounded px-3 py-2"
           value={gender}
           onChange={e => setGender(e.target.value)}
-        />
+        >
+          <option value="">Select Gender</option>
+          <option value="Male">Male</option>
+          <option value="Female">Female</option>
+          <option value="Other">Other</option>
+        </select>
       </label>
 
       <label className="block">
@@ -194,7 +217,14 @@ export default function ProfilePage() {
 
       {isProvider && (
         <div className="space-y-4 p-4 border rounded">
-          {/* Location Picker */}
+          <button
+            type="button"
+            onClick={useCurrentLocation}
+            className="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300"
+          >
+            Use My Current Location
+          </button>
+
           <LocationPicker
             initialLatLng={lat !== null && lng !== null ? { lat, lng } : undefined}
             onLocationSelect={(latVal, lngVal, addr) => {

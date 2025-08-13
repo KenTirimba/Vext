@@ -2,7 +2,7 @@
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { db } from '@/lib/firebase';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, updateDoc, getDoc } from 'firebase/firestore';
 
 export async function POST(request: Request) {
   const payload = await request.text();
@@ -16,31 +16,55 @@ export async function POST(request: Request) {
 
   const body = JSON.parse(payload);
   const event = body.event;
-  const {
-    reference,
-    status,
-  } = body.data;
+  const { reference, status, metadata } = body.data;
 
-  // Successful transfer: update withdrawal status in Firestore
+  // ✅ Booking payment success
+  if (event === 'charge.success' && status === 'success') {
+    const bookingId = metadata?.bookingId;
+    if (bookingId) {
+      const bookingRef = doc(db, 'bookings', bookingId);
+      await updateDoc(bookingRef, { status: 'confirmed', paymentReference: reference });
+
+      // Fetch booking details
+      const bookingSnap = await getDoc(bookingRef);
+      const bookingData = bookingSnap.data();
+
+      // Send SMS to provider
+      if (bookingData?.providerPhone) {
+        const firstName = (bookingData.clientName || '').split(' ').filter(Boolean)[0] || 'Client';
+        const bookingLink = `${process.env.NEXT_PUBLIC_BASE_URL || ''}/bookings/${bookingId}`;
+        const dateStr = new Date(bookingData.date).toDateString();
+        const timeStr = bookingData.time || '';
+
+        await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || ''}/api/send-sms`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to: bookingData.providerPhone,
+            message: `Hi ${bookingData.creatorName || 'Provider'}, you have a new booking (Order #${bookingId}) from ${firstName} on ${dateStr} at ${timeStr}. Please accept or reject here: ${bookingLink}`,
+          }),
+        });
+      }
+    }
+  }
+
+  // ✅ Withdrawal success
   if (event === 'transfer.success') {
-    const { uid } = body.data.metadata || {};
+    const { uid } = metadata || {};
     if (uid) {
       const wRef = doc(db, `users/${uid}/withdrawals`, reference);
       await updateDoc(wRef, { status: 'success' });
-      return NextResponse.json({ received: true });
     }
   }
 
-  // Transfer failed: mark appropriately
+  // ❌ Withdrawal failed
   if (event === 'transfer.failed') {
-    const { uid } = body.data.metadata || {};
+    const { uid } = metadata || {};
     if (uid) {
       const wRef = doc(db, `users/${uid}/withdrawals`, reference);
       await updateDoc(wRef, { status: 'failed' });
-      return NextResponse.json({ received: true });
     }
   }
 
-  // Acknowledge other events
   return NextResponse.json({ received: true });
 }

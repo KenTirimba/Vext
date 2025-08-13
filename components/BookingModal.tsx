@@ -7,7 +7,7 @@ import { auth, db } from '../lib/firebase';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import PhoneInput from 'react-phone-number-input';
 import 'react-phone-number-input/style.css';
-import { addDoc, collection, updateDoc, doc, getDoc } from 'firebase/firestore';
+import { getDoc, doc, updateDoc } from 'firebase/firestore';
 
 interface Addon {
   name: string;
@@ -19,7 +19,7 @@ interface VideoDoc {
   serviceCost?: number;
   addons?: Addon[];
   userId?: string;
-  id?: string; // ensure we can pass videoId
+  id?: string;
 }
 
 interface UserProfile {
@@ -40,19 +40,16 @@ export default function BookingModal({ video, creator, onClose }: BookingModalPr
   const [step, setStep] = useState(1);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [selectedTime, setSelectedTime] = useState<string>('');
-
   const [addonSelections, setAddonSelections] = useState<Record<string, number>>({});
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
 
   const base = video.serviceCost || 0;
   const addons = video.addons || [];
-
-  const total = base + Object.entries(addonSelections).reduce((sum, [name, qty]) => {
-    const addon = addons.find(a => a.name === name);
+  const total = base + Object.entries(addonSelections).reduce((sum, [n, qty]) => {
+    const addon = addons.find(a => a.name === n);
     return sum + (addon ? addon.cost * qty : 0);
   }, 0);
-
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
 
   useEffect(() => {
     if (!user) return;
@@ -75,72 +72,89 @@ export default function BookingModal({ video, creator, onClose }: BookingModalPr
 
   const handlePay = async () => {
     if (!profileComplete) return;
+
     try {
-      // Create booking in Firestore
-      await addDoc(collection(db, 'bookings'), {
+      // Step 1: Save booking first
+      const bookingData = {
         clientId: user!.uid,
         providerId: video.userId,
-        videoId: video.id || '', // store the videoId
+        videoId: video.id || '',
         date: selectedDate.toISOString(),
         time: selectedTime,
         total,
-        addons: addonSelections, // keep raw qty data
-        addonsSelected: Object.keys(addonSelections), // store just the names for provider view
-        status: 'pending',
-        createdAt: Date.now(),
+        addons: addonSelections,
+        addonsSelected: Object.keys(addonSelections),
+        status: 'pending', // Payment not confirmed yet
         clientPhone: phone,
         providerPhone: creator.phone,
         clientName: name,
-      });
+        creatorName: creator.name,
+      };
 
-      // Send SMS via our API route
-      try {
-        const firstName = (name || '').split(' ').filter(Boolean)[0] || 'Client';
-        if (creator.phone) {
-          await fetch('/api/send-sms', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              to: creator.phone,
-              message: `Hi! ${firstName} just booked your service. Please check your dashboard for details.`,
-            }),
-          });
-        }
-      } catch (smsErr) {
-        console.error('Failed to send SMS notification', smsErr);
-      }
-
-      // Continue with payment
-      const res = await fetch('/api/paystack/init', {
+      const saveRes = await fetch('/api/save-booking', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: user?.email, amount: total }),
+        body: JSON.stringify(bookingData),
       });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Payment init failed');
-      window.location.href = data.authorization_url;
+      const saveData = await saveRes.json();
+      if (!saveRes.ok) throw new Error(saveData.error || 'Failed to save booking');
+
+      const bookingId = saveData.bookingId;
+
+      // Step 2: Create Paystack transaction with bookingId in metadata
+      const initRes = await fetch('/api/paystack/init', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: user?.email,
+          amount: total,
+          metadata: { bookingId }, // ✅ Important
+        }),
+      });
+
+      const initData = await initRes.json();
+      if (!initRes.ok) throw new Error(initData.error || 'Payment init failed');
+
+      // Step 3: Open Paystack Inline Popup
+      const paystackHandler = (window as any).PaystackPop.setup({
+        key: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY,
+        email: user?.email,
+        amount: total * 100,
+        currency: 'KES',
+        ref: initData.reference,
+        metadata: { bookingId },
+        callback: () => {
+          alert('Payment processing... We will confirm your booking shortly.');
+          onClose();
+        },
+        onClose: () => {
+          alert('Payment window closed');
+        }
+      });
+
+      paystackHandler.openIframe();
     } catch (err: any) {
       alert(err.message);
     }
   };
 
-  const toggleAddon = (name: string) => {
+  const toggleAddon = (n: string) => {
     setAddonSelections(prev => {
       const current = { ...prev };
-      if (name in current) {
-        delete current[name];
+      if (n in current) {
+        delete current[n];
       } else {
-        current[name] = 1;
+        current[n] = 1;
       }
       return current;
     });
   };
 
-  const updateAddonQty = (name: string, qty: number) => {
+  const updateAddonQty = (n: string, qty: number) => {
     setAddonSelections(prev => ({
       ...prev,
-      [name]: Math.max(1, qty),
+      [n]: Math.max(1, qty),
     }));
   };
 
@@ -188,7 +202,6 @@ export default function BookingModal({ video, creator, onClose }: BookingModalPr
 
             <div className="mt-4">
               <p className="font-semibold">Service cost: KSHS {base}</p>
-
               {addons.length > 0 && (
                 <>
                   <p className="mt-2 font-semibold">Add-ons:</p>

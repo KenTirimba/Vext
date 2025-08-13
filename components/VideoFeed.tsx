@@ -92,7 +92,7 @@ export default function VideoFeed() {
 
       if (user) {
         const lm: Record<string, boolean> = {};
-        await Promise.all(videos.map(async v => {
+        await Promise.all(docs.map(async v => {
           const ldoc = await getDoc(doc(db, 'videos', v.id, 'likes', user.uid!));
           lm[v.id] = ldoc.exists();
         }));
@@ -112,10 +112,7 @@ export default function VideoFeed() {
     if (!user) return alert('Sign in to like');
     const ref = doc(db, 'videos', videoId, 'likes', user.uid!);
     if (likesMap[videoId]) await deleteDoc(ref);
-    else await setDoc(doc(db, 'videos', videoId, 'likes', user.uid!), {
-      likedAt: Date.now(),
-      userId: user.uid
-    });
+    else await setDoc(ref, { likedAt: Date.now(), userId: user.uid });
     setLikesMap(prev => ({ ...prev, [videoId]: !prev[videoId] }));
   };
 
@@ -123,10 +120,7 @@ export default function VideoFeed() {
     if (!user) return alert('Sign in to follow');
     const ref = doc(db, 'users', creatorId, 'followers', user.uid!);
     if (followMap[creatorId]) await deleteDoc(ref);
-    else await setDoc(
-      doc(db, 'users', creatorId, 'followers', user.uid!),
-      { followedAt: Date.now(), userId: user.uid } as any
-    );
+    else await setDoc(ref, { followedAt: Date.now(), userId: user.uid } as any);
     setFollowMap(prev => ({ ...prev, [creatorId]: !prev[creatorId] }));
   };
 
@@ -137,14 +131,14 @@ export default function VideoFeed() {
   };
 
   const scrollNext = () => {
-    const inst = sliderInstanceRef.current;
-    if (!inst?.track?.details) return;
-    inst.next();
+    if (sliderInstanceRef.current?.next) {
+      sliderInstanceRef.current.next();
+    }
   };
   const scrollPrev = () => {
-    const inst = sliderInstanceRef.current;
-    if (!inst?.track?.details) return;
-    inst.prev();
+    if (sliderInstanceRef.current?.prev) {
+      sliderInstanceRef.current.prev();
+    }
   };
 
   const togglePlay = (e: React.MouseEvent<HTMLVideoElement>) => {
@@ -169,46 +163,60 @@ export default function VideoFeed() {
                 loop
                 playsInline
                 onClick={togglePlay}
-                className="max-h-[90vh] max-w-full object-contain rounded-md"
+                className="h-full w-full object-contain bg-black"
               />
 
-              <div onClick={() => v.userId && router.push(`/creator/${v.userId}`)}
-                   className="absolute top-4 left-4 bg-black/60 px-3 py-1 rounded-md cursor-pointer hover:bg-black/80 transition text-sm font-medium">
+              {/* Username */}
+              <div
+                onClick={() => v.userId && router.push(`/creator/${v.userId}`)}
+                className="absolute top-4 left-4 bg-black/60 px-3 py-1 rounded-md cursor-pointer hover:bg-black/80 transition text-sm font-medium"
+              >
                 @{up.username || 'unknown'}
               </div>
 
-              <div className="absolute right-4 bottom-32 flex flex-col items-center space-y-4">
+              {/* Action buttons at bottom right */}
+              <div className="absolute right-4 bottom-20 flex flex-col items-center space-y-4 sm:bottom-8">
                 <button onClick={() => handleLike(v.id)} className="text-2xl">
                   {liked ? <FaHeart className="text-red-500" /> : <FaRegHeart />}
                 </button>
                 <button className="text-2xl" onClick={() => setCommentVideo(v.id)}>
                   <FaCommentDots />
                 </button>
-                <button className="text-2xl"><FaShare /></button>
+                <button className="text-2xl">
+                  <FaShare />
+                </button>
                 {v.userId !== user?.uid && (
                   <button onClick={() => handleFollow(v.userId!)} className="text-2xl">
                     {followed ? <FaUserCheck /> : <FaUserPlus />}
                   </button>
                 )}
-                <button onClick={() => setBookingVideo(v)}
-                        className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded mt-2 text-sm">
+                <button
+                  onClick={() => setBookingVideo(v)}
+                  className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded mt-2 text-sm"
+                >
                   Book Service
                 </button>
               </div>
 
+              {/* Edit/Delete buttons for owner */}
               {isOwner && (
-                <div className="absolute top-4 right-4 flex flex-col space-y-2">
-                  <button onClick={() => setEditingVideo(v)}
-                          className="bg-yellow-500 hover:bg-yellow-600 text-white text-sm px-2 py-1 rounded">
+                <div className="absolute top-4 right-4 flex flex-col space-y-2 z-50">
+                  <button
+                    onClick={() => setEditingVideo(v)}
+                    className="bg-yellow-500 hover:bg-yellow-600 text-white text-sm px-2 py-1 rounded"
+                  >
                     Edit
                   </button>
-                  <button onClick={() => handleDelete(v.id)}
-                          className="bg-red-500 hover:bg-red-600 text-white text-sm px-2 py-1 rounded">
+                  <button
+                    onClick={() => handleDelete(v.id)}
+                    className="bg-red-500 hover:bg-red-600 text-white text-sm px-2 py-1 rounded"
+                  >
                     Delete
                   </button>
                 </div>
               )}
 
+              {/* Title & Description */}
               {(v.title || v.description) && (
                 <div className="absolute bottom-0 w-full px-4 py-4 bg-gradient-to-t from-black/80 to-transparent">
                   {v.title && <h3 className="text-lg font-bold">{v.title}</h3>}
@@ -220,18 +228,25 @@ export default function VideoFeed() {
         })}
       </div>
 
+      {/* Scroll buttons */}
       <div className="absolute right-4 top-1/2 transform -translate-y-1/2 hidden sm:flex flex-col space-y-2 z-50">
-        <button onClick={scrollPrev}
-                className="bg-white/20 hover:bg-white/40 p-2 rounded-full text-white">
+        <button
+          onClick={scrollPrev}
+          className="bg-white/20 hover:bg-white/40 p-2 rounded-full text-white"
+        >
           <FaChevronUp />
         </button>
-        <button onClick={scrollNext}
-                className="bg-white/20 hover:bg-white/40 p-2 rounded-full text-white">
+        <button
+          onClick={scrollNext}
+          className="bg-white/20 hover:bg-white/40 p-2 rounded-full text-white"
+        >
           <FaChevronDown />
         </button>
       </div>
 
-      {commentVideo && <CommentModal videoId={commentVideo} onClose={() => setCommentVideo(null)} />}
+      {commentVideo && (
+        <CommentModal videoId={commentVideo} onClose={() => setCommentVideo(null)} />
+      )}
 
       {bookingVideo && (
         <BookingModal
@@ -242,10 +257,7 @@ export default function VideoFeed() {
       )}
 
       {editingVideo && (
-        <EditVideoModal
-          video={editingVideo}
-          onClose={() => setEditingVideo(null)}
-        />
+        <EditVideoModal video={editingVideo} onClose={() => setEditingVideo(null)} />
       )}
     </div>
   );

@@ -15,16 +15,27 @@ interface Booking {
   total: number;
   status: string;
   addons?: Record<string, number>;
+  clientPhone?: string;
+  clientName?: string;
 }
 
 interface Video {
   title?: string;
   details?: string;
+  thumbnailUrl?: string; // assume videos collection has this
+  imageUrl?: string; // fallback for photos
+}
+
+interface UserProfile {
+  name?: string;
+  location?: string;
+  building?: string;
+  room?: string;
 }
 
 export default function CreatorBookings() {
   const [user] = useAuthState(auth);
-  const [bookings, setBookings] = useState<(Booking & { video?: Video })[]>([]);
+  const [bookings, setBookings] = useState<(Booking & { video?: Video; client?: UserProfile; provider?: UserProfile })[]>([]);
 
   useEffect(() => {
     if (!user) return;
@@ -40,6 +51,8 @@ export default function CreatorBookings() {
         snap.docs.map(async (d) => {
           const booking = { id: d.id, ...d.data() } as Booking;
           let video: Video | undefined;
+          let client: UserProfile | undefined;
+          let provider: UserProfile | undefined;
 
           if (booking.videoId) {
             const videoSnap = await getDoc(doc(db, 'videos', booking.videoId));
@@ -48,7 +61,21 @@ export default function CreatorBookings() {
             }
           }
 
-          return { ...booking, video };
+          if (booking.clientId) {
+            const clientSnap = await getDoc(doc(db, 'users', booking.clientId));
+            if (clientSnap.exists()) {
+              client = clientSnap.data() as UserProfile;
+            }
+          }
+
+          if (booking.providerId) {
+            const providerSnap = await getDoc(doc(db, 'users', booking.providerId));
+            if (providerSnap.exists()) {
+              provider = providerSnap.data() as UserProfile;
+            }
+          }
+
+          return { ...booking, video, client, provider };
         })
       );
 
@@ -56,11 +83,42 @@ export default function CreatorBookings() {
     })();
   }, [user]);
 
+  const sendClientSMS = async (booking: Booking & { client?: UserProfile; provider?: UserProfile }) => {
+    if (!booking.client?.name || !booking.clientPhone) return;
+
+    const dateStr = new Date(booking.date).toDateString();
+    const timeStr = booking.time;
+    const providerName = booking.provider?.name || 'Service Provider';
+    const locationDetails = `${booking.provider?.location || ''} ${booking.provider?.building || ''} ${booking.provider?.room || ''}`.trim();
+    const mapsLink = booking.provider?.location ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(booking.provider.location)}` : '';
+
+    const message = booking.status === 'accepted'
+      ? `Hi ${booking.client.name}, your booking #${booking.id} has been ACCEPTED by ${providerName} for ${dateStr} at ${timeStr}. Location: ${locationDetails}. Map: ${mapsLink}`
+      : `Hi ${booking.client.name}, your booking #${booking.id} has been REJECTED by ${providerName}.`;
+
+    await fetch('/api/send-sms', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        to: booking.clientPhone,
+        message,
+      }),
+    });
+  };
+
   const updateStatus = async (id: string, status: 'accepted' | 'rejected' | 'completed') => {
+    const booking = bookings.find(b => b.id === id);
+    if (!booking) return;
+
     await updateDoc(doc(db, 'bookings', id), { status });
     setBookings((prev) =>
       prev.map((b) => (b.id === id ? { ...b, status } : b))
     );
+
+    // Only send SMS to client on accept or reject
+    if (status === 'accepted' || status === 'rejected') {
+      await sendClientSMS({ ...booking, status });
+    }
   };
 
   return (
@@ -72,11 +130,18 @@ export default function CreatorBookings() {
         <div key={b.id} className="border p-4 mb-4 rounded shadow">
           {b.video && (
             <>
+              {(b.video.thumbnailUrl || b.video.imageUrl) && (
+                <img
+                  src={b.video.thumbnailUrl || b.video.imageUrl}
+                  alt={b.video.title || 'Booking Image'}
+                  className="w-full h-48 object-cover rounded mb-2"
+                />
+              )}
               <h2 className="text-lg font-semibold">{b.video.title}</h2>
               <p className="text-gray-700">{b.video.details}</p>
             </>
           )}
-          <p className="mt-2"><strong>Client:</strong> {b.clientId}</p>
+          <p className="mt-2"><strong>Client:</strong> {b.client?.name || b.clientId}</p>
           <p><strong>Date:</strong> {new Date(b.date).toLocaleDateString()}</p>
           <p><strong>Time:</strong> {b.time}</p>
           <p><strong>Total:</strong> KSHS {b.total}</p>
