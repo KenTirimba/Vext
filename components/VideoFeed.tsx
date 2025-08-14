@@ -22,6 +22,7 @@ import { useRouter } from 'next/navigation';
 import { CommentModal } from './CommentModal';
 import BookingModal from './BookingModal';
 import { EditVideoModal } from './EditVideoModal';
+import { AuthModal } from './AuthModal'; // Ensure this is available
 
 interface VideoDoc {
   url: string;
@@ -186,8 +187,8 @@ export default function VideoFeed() {
 
   return (
     <div className="relative h-screen w-full bg-black text-white overflow-hidden">
-      {/* Profile Button with Dropdown (replacing navbar) */}
-      <div className="absolute top-4 right-4 z-50">
+      {/* Profile Button with Dropdown */}
+      <div className="absolute top-2 right-2 z-50">
         <div className="relative">
           <button
             onClick={() => setDropdownOpen(!dropdownOpen)}
@@ -207,18 +208,18 @@ export default function VideoFeed() {
           </button>
 
           {dropdownOpen && (
-            <div className="absolute right-0 mt-2 w-52 bg-gray-900 rounded-lg shadow-lg p-3 text-white">
+            <div className="absolute right-0 mt-2 w-48 bg-gray-900 rounded-lg shadow-lg p-2 text-white text-sm">
               {user ? (
                 <>
-                  <div className="flex items-center space-x-3 p-2 mb-3 bg-gray-800 rounded">
+                  <div className="flex items-center space-x-2 p-1 mb-2 bg-gray-800 rounded">
                     {user.photoURL ? (
                       <img
                         src={user.photoURL}
                         alt="Avatar"
-                        className="w-10 h-10 rounded-full object-cover"
+                        className="w-8 h-8 rounded-full object-cover"
                       />
                     ) : (
-                      <div className="w-10 h-10 bg-gray-600 rounded-full flex items-center justify-center">
+                      <div className="w-8 h-8 bg-gray-600 rounded-full flex items-center justify-center">
                         <span className="text-white">U</span>
                       </div>
                     )}
@@ -232,7 +233,7 @@ export default function VideoFeed() {
                           router.push('/upload');
                           setDropdownOpen(false);
                         }}
-                        className="block w-full px-3 py-2 hover:bg-gray-700 rounded mb-1"
+                        className="block w-full px-2 py-1 hover:bg-gray-700 rounded mb-1"
                       >
                         Upload
                       </button>
@@ -242,7 +243,7 @@ export default function VideoFeed() {
                           router.push('/provider/dashboard');
                           setDropdownOpen(false);
                         }}
-                        className="block w-full px-3 py-2 hover:bg-gray-700 rounded mb-1"
+                        className="block w-full px-2 py-1 hover:bg-gray-700 rounded mb-1"
                       >
                         Provider Dashboard
                       </button>
@@ -253,7 +254,7 @@ export default function VideoFeed() {
                     onClick={() => {
                       handleBookingsClick();
                     }}
-                    className="block w-full px-3 py-2 hover:bg-gray-700 rounded mb-1"
+                    className="block w-full px-2 py-1 hover:bg-gray-700 rounded mb-1"
                   >
                     {isProvider ? 'Client Bookings' : 'My Bookings'}
                   </button>
@@ -263,7 +264,7 @@ export default function VideoFeed() {
                       router.push('/profile');
                       setDropdownOpen(false);
                     }}
-                    className="block w-full px-3 py-2 hover:bg-gray-700 rounded mb-1"
+                    className="block w-full px-2 py-1 hover:bg-gray-700 rounded mb-1"
                   >
                     Edit Profile
                   </button>
@@ -272,7 +273,7 @@ export default function VideoFeed() {
                     onClick={() => {
                       handleSignOut();
                     }}
-                    className="block w-full px-3 py-2 hover:bg-gray-700 rounded text-red-400"
+                    className="block w-full px-2 py-1 hover:bg-gray-700 rounded text-red-400"
                   >
                     Sign Out
                   </button>
@@ -282,7 +283,7 @@ export default function VideoFeed() {
                   onClick={() => {
                     setAuthDialogOpen(true);
                   }}
-                  className="block w-full px-3 py-2 hover:bg-gray-700 rounded"
+                  className="block w-full px-2 py-1 hover:bg-gray-700 rounded"
                 >
                   Sign In / Sign Up
                 </button>
@@ -310,61 +311,61 @@ export default function VideoFeed() {
                 className="h-screen w-full object-contain z-40"
               />
 
-              {/* Username (Top Left, shifted below button area) */}
+              {/* Username (Top Left) */}
               <div
                 onClick={() => v.userId && router.push(`/creator/${v.userId}`)}
-                className="absolute top-8 left-4 bg-black/70 px-3 py-1 rounded-md cursor-pointer hover:bg-black/90 transition text-sm font-semibold text-white z-50"
+                className="absolute top-2 left-2 bg-black/70 px-1 py-0.5 rounded-md cursor-pointer hover:bg-black/90 transition text-xs font-semibold text-white z-50 sm:top-4 sm:left-4"
               >
                 @{up.username || 'unknown'}
               </div>
 
               {/* Action buttons (Bottom Right, Vertical) */}
-              <div className="absolute bottom-4 right-4 flex flex-col items-center space-y-4 z-50">
-                <button onClick={() => handleLike(v.id)} className="text-2xl">
+              <div className="absolute bottom-2 right-2 flex flex-col items-center space-y-2 z-50 sm:bottom-4 sm:right-4">
+                <button onClick={() => handleLike(v.id)} className="text-xl sm:text-2xl">
                   {liked ? <FaHeart className="text-red-500" /> : <FaRegHeart />}
                 </button>
-                <button className="text-2xl" onClick={() => setCommentVideo(v.id)}>
+                <button className="text-xl sm:text-2xl" onClick={() => setCommentVideo(v.id)}>
                   <FaCommentDots />
                 </button>
-                <button className="text-2xl">
+                <button className="text-xl sm:text-2xl">
                   <FaShare />
                 </button>
                 {v.userId !== user?.uid && (
-                  <button onClick={() => handleFollow(v.userId!)} className="text-2xl">
+                  <button onClick={() => handleFollow(v.userId!)} className="text-xl sm:text-2xl">
                     {followed ? <FaUserCheck /> : <FaUserPlus />}
                   </button>
                 )}
                 <button
                   onClick={() => setBookingVideo(v)}
-                  className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded text-sm"
+                  className="bg-green-500 hover:bg-green-600 text-white px-2 py-1 rounded text-xs sm:text-sm"
                 >
                   Book Service
                 </button>
               </div>
 
-              {/* Edit/Delete buttons for owner (Top Right, below button area) */}
+              {/* Edit/Delete buttons for owner (Top Right) */}
               {isOwner && (
-                <div className="absolute top-20 right-4 flex flex-col space-y-2 z-50">
+                <div className="absolute top-6 right-2 flex flex-col space-y-1 z-50 sm:top-8 sm:right-4">
                   <button
                     onClick={() => setEditingVideo(v)}
-                    className="bg-yellow-500 hover:bg-yellow-600 text-white text-sm px-2 py-1 rounded"
+                    className="bg-yellow-500 hover:bg-yellow-600 text-white text-xs px-1 py-0.5 rounded sm:text-sm sm:px-2 sm:py-1"
                   >
                     Edit
                   </button>
                   <button
                     onClick={() => handleDelete(v.id)}
-                    className="bg-red-500 hover:bg-red-600 text-white text-sm px-2 py-1 rounded"
+                    className="bg-red-500 hover:bg-red-600 text-white text-xs px-1 py-0.5 rounded sm:text-sm sm:px-2 sm:py-1"
                   >
                     Delete
                   </button>
                 </div>
               )}
 
-              {/* Title & Description (Bottom Left, Transparent Background) */}
+              {/* Title & Description (Bottom Left) */}
               {(v.title || v.description) && (
-                <div className="absolute bottom-4 left-4 max-w-[50%] bg-transparent px-4 py-3 text-shadow">
-                  {v.title && <h3 className="text-lg font-bold text-white">{v.title}</h3>}
-                  {v.description && <p className="text-sm text-gray-200">{v.description}</p>}
+                <div className="absolute bottom-2 left-2 max-w-[60%] bg-transparent px-1 py-0.5 text-shadow overflow-hidden text-ellipsis z-50 sm:bottom-4 sm:left-4 sm:max-w-[50%] sm:px-4 sm:py-3">
+                  {v.title && <h3 className="text-sm font-bold text-white sm:text-lg">{v.title}</h3>}
+                  {v.description && <p className="text-xs text-gray-200 sm:text-sm">{v.description}</p>}
                 </div>
               )}
             </div>
@@ -374,16 +375,16 @@ export default function VideoFeed() {
 
       {/* Scroll buttons (only shown when slider is ready) */}
       {isSliderReady && (
-        <div className="absolute right-4 top-1/2 transform -translate-y-1/2 hidden sm:flex flex-col space-y-2 z-50">
+        <div className="absolute right-2 top-1/2 transform -translate-y-1/2 hidden sm:flex flex-col space-y-2 z-50 sm:right-4">
           <button
             onClick={scrollPrev}
-            className="bg-white/20 hover:bg-white/40 p-2 rounded-full text-white"
+            className="bg-white/20 hover:bg-white/40 p-1 rounded-full text-white sm:p-2"
           >
             <FaChevronUp />
           </button>
           <button
             onClick={scrollNext}
-            className="bg-white/20 hover:bg-white/40 p-2 rounded-full text-white"
+            className="bg-white/20 hover:bg-white/40 p-1 rounded-full text-white sm:p-2"
           >
             <FaChevronDown />
           </button>
