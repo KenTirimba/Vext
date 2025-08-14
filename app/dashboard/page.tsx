@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import VideoFeed from '@/components/VideoFeed';
-import { Navbar } from '@/components/Navbar';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -19,7 +18,6 @@ export default function DashboardPage() {
 
   return (
     <main className="bg-black text-white min-h-screen">
-      <Navbar onAuthClick={() => {}} />
       <div className="pt-20">
         <VideoFeed />
       </div>
