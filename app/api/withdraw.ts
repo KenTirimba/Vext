@@ -1,13 +1,13 @@
-// File: /app/api/withdraw/route.ts
+// app/api/withdraw/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { doc, getDoc, updateDoc, writeBatch, Timestamp } from 'firebase/firestore';
+import { doc, getDoc, writeBatch, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 
 export async function POST(request: NextRequest) {
   try {
-    const { uid, amount, method, pin } = await request.json();
+    const { uid, amount, pin } = await request.json();
     const userRef = doc(db, 'users', uid);
     const userSnap = await getDoc(userRef);
 
@@ -17,13 +17,13 @@ export async function POST(request: NextRequest) {
 
     const userData = userSnap.data() as any;
 
-    // Verify PIN
+    // ✅ Verify PIN
     if (!userData.withdrawalPinHash || !bcrypt.compareSync(pin, userData.withdrawalPinHash)) {
       return NextResponse.json({ error: 'Invalid PIN' }, { status: 401 });
     }
 
     const available: number = userData.wallet?.available || 0;
-    const fee = calculatePaystackFee(method, amount);
+    const fee = calculateMpesaFee(amount);
     const totalToDeduct = amount + fee;
 
     if (totalToDeduct > available) {
@@ -36,7 +36,8 @@ export async function POST(request: NextRequest) {
     }
 
     const reference = uuidv4().replace(/-/g, '');
-    // Initiate transfer with Paystack
+
+    // ✅ Initiate transfer with Paystack
     const res = await fetch('https://api.paystack.co/transfer', {
       method: 'POST',
       headers: {
@@ -45,10 +46,15 @@ export async function POST(request: NextRequest) {
       },
       body: JSON.stringify({
         source: 'balance',
-        amount: totalToDeduct,
+        amount: totalToDeduct * 100, // Paystack expects kobo (minor units)
         recipient: recipient_code,
         reference,
         reason: 'Service provider withdrawal',
+        metadata: {
+          uid,
+          amount,
+          fee,
+        },
       }),
     });
 
@@ -59,17 +65,18 @@ export async function POST(request: NextRequest) {
 
     const transferCode = data.data.transfer_code;
 
-    // Update Firestore atomically
+    // ✅ Save withdrawal request immediately
     const batch = writeBatch(db);
+
     batch.update(userRef, { 'wallet.available': available - totalToDeduct });
 
-    const withdrawalRef = doc(db, `users/${uid}/withdrawals`, uuidv4());
+    const withdrawalRef = doc(db, `users/${uid}/withdrawals`, reference);
     batch.set(withdrawalRef, {
       amount,
       fee,
-      net: amount - fee,
-      method,
-      status: data.data.status,
+      total: totalToDeduct,
+      method: 'mpesa',
+      status: 'pending',
       reference,
       transferCode,
       createdAt: Timestamp.now(),
@@ -77,20 +84,18 @@ export async function POST(request: NextRequest) {
 
     await batch.commit();
 
-    return NextResponse.json({ transferCode }, { status: 200 });
+    return NextResponse.json({ transferCode, reference }, { status: 200 });
   } catch (err: any) {
     console.error('Withdraw API Error:', err);
     return NextResponse.json({ error: err.message || 'Server error' }, { status: 500 });
   }
 }
 
-function calculatePaystackFee(method: string, amount: number): number {
-  // Modify logic per your fee structure
-  if (method === 'mobile') {
-    if (amount <= 1500) return 20;
-    if (amount <= 20000) return 40;
-    return 60;
-  } else {
-    return 80;
-  }
+function calculateMpesaFee(amount: number): number {
+  // ✅ M-PESA Paystack withdrawal fees
+  if (amount <= 1500) return 20;
+  if (amount <= 20000) return 40;
+  if (amount <= 40000) return 140;
+  if (amount <= 999999) return 180;
+  return 350;
 }

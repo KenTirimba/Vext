@@ -22,7 +22,7 @@ import { useRouter } from 'next/navigation';
 import { CommentModal } from './CommentModal';
 import BookingModal from './BookingModal';
 import { EditVideoModal } from './EditVideoModal';
-import { AuthModal } from './AuthModal'; // Ensure this is available
+import { AuthModal } from './AuthModal';
 
 interface VideoDoc {
   url: string;
@@ -73,7 +73,6 @@ export default function VideoFeed() {
     created(slider) {
       sliderInstanceRef.current = slider;
       setIsSliderReady(true);
-      console.log('Slider instance created:', slider);
     },
   });
 
@@ -81,7 +80,6 @@ export default function VideoFeed() {
     if (instanceRef.current) {
       sliderInstanceRef.current = instanceRef.current;
       setIsSliderReady(true);
-      console.log('Slider instance assigned:', instanceRef.current);
     }
   }, [instanceRef]);
 
@@ -121,7 +119,6 @@ export default function VideoFeed() {
 
   useEffect(() => {
     if (!user) return;
-
     getDoc(doc(db, 'users', user.uid)).then(snap => {
       const data = snap.data();
       if (data) {
@@ -165,18 +162,14 @@ export default function VideoFeed() {
   };
 
   const scrollNext = () => {
-    if (sliderInstanceRef.current?.next) {
+    if (sliderInstanceRef.current && typeof sliderInstanceRef.current.next === 'function') {
       sliderInstanceRef.current.next();
-    } else {
-      console.warn('Slider instance not ready for next action');
     }
   };
 
   const scrollPrev = () => {
-    if (sliderInstanceRef.current?.prev) {
+    if (sliderInstanceRef.current && typeof sliderInstanceRef.current.prev === 'function') {
       sliderInstanceRef.current.prev();
-    } else {
-      console.warn('Slider instance not ready for prev action');
     }
   };
 
@@ -187,21 +180,14 @@ export default function VideoFeed() {
 
   return (
     <div className="relative h-screen w-full bg-black text-white overflow-hidden">
-      {/* Profile Button with Dropdown */}
-      <div className="absolute top-2 right-2 z-50">
+      {/* Profile Button */}
+      <div className="absolute top-3 right-3 z-50">
         <div className="relative">
-          <button
-            onClick={() => setDropdownOpen(!dropdownOpen)}
-            className="focus:outline-none"
-          >
+          <button onClick={() => setDropdownOpen(!dropdownOpen)} className="focus:outline-none">
             {user?.photoURL ? (
-              <img
-                src={user.photoURL}
-                alt="profile"
-                className="w-8 h-8 rounded-full object-cover border border-white/40"
-              />
+              <img src={user.photoURL} alt="profile" className="w-9 h-9 rounded-full object-cover border border-white/40" />
             ) : (
-              <div className="w-8 h-8 bg-gray-400 rounded-full flex items-center justify-center">
+              <div className="w-9 h-9 bg-gray-400 rounded-full flex items-center justify-center">
                 <span className="text-white font-medium">U</span>
               </div>
             )}
@@ -213,11 +199,7 @@ export default function VideoFeed() {
                 <>
                   <div className="flex items-center space-x-2 p-1 mb-2 bg-gray-800 rounded">
                     {user.photoURL ? (
-                      <img
-                        src={user.photoURL}
-                        alt="Avatar"
-                        className="w-8 h-8 rounded-full object-cover"
-                      />
+                      <img src={user.photoURL} alt="Avatar" className="w-8 h-8 rounded-full object-cover" />
                     ) : (
                       <div className="w-8 h-8 bg-gray-600 rounded-full flex items-center justify-center">
                         <span className="text-white">U</span>
@@ -228,63 +210,30 @@ export default function VideoFeed() {
 
                   {isProvider && (
                     <>
-                      <button
-                        onClick={() => {
-                          router.push('/upload');
-                          setDropdownOpen(false);
-                        }}
-                        className="block w-full px-2 py-1 hover:bg-gray-700 rounded mb-1"
-                      >
+                      <button onClick={() => { router.push('/upload'); setDropdownOpen(false); }} className="block w-full px-2 py-1 hover:bg-gray-700 rounded mb-1">
                         Upload
                       </button>
 
-                      <button
-                        onClick={() => {
-                          router.push('/provider/dashboard');
-                          setDropdownOpen(false);
-                        }}
-                        className="block w-full px-2 py-1 hover:bg-gray-700 rounded mb-1"
-                      >
+                      <button onClick={() => { router.push('/provider/dashboard'); setDropdownOpen(false); }} className="block w-full px-2 py-1 hover:bg-gray-700 rounded mb-1">
                         Provider Dashboard
                       </button>
                     </>
                   )}
 
-                  <button
-                    onClick={() => {
-                      handleBookingsClick();
-                    }}
-                    className="block w-full px-2 py-1 hover:bg-gray-700 rounded mb-1"
-                  >
+                  <button onClick={handleBookingsClick} className="block w-full px-2 py-1 hover:bg-gray-700 rounded mb-1">
                     {isProvider ? 'Client Bookings' : 'My Bookings'}
                   </button>
 
-                  <button
-                    onClick={() => {
-                      router.push('/profile');
-                      setDropdownOpen(false);
-                    }}
-                    className="block w-full px-2 py-1 hover:bg-gray-700 rounded mb-1"
-                  >
+                  <button onClick={() => { router.push('/profile'); setDropdownOpen(false); }} className="block w-full px-2 py-1 hover:bg-gray-700 rounded mb-1">
                     Edit Profile
                   </button>
 
-                  <button
-                    onClick={() => {
-                      handleSignOut();
-                    }}
-                    className="block w-full px-2 py-1 hover:bg-gray-700 rounded text-red-400"
-                  >
+                  <button onClick={handleSignOut} className="block w-full px-2 py-1 hover:bg-gray-700 rounded text-red-400">
                     Sign Out
                   </button>
                 </>
               ) : (
-                <button
-                  onClick={() => {
-                    setAuthDialogOpen(true);
-                  }}
-                  className="block w-full px-2 py-1 hover:bg-gray-700 rounded"
-                >
+                <button onClick={() => setAuthDialogOpen(true)} className="block w-full px-2 py-1 hover:bg-gray-700 rounded">
                   Sign In / Sign Up
                 </button>
               )}
@@ -308,64 +257,55 @@ export default function VideoFeed() {
                 loop
                 playsInline
                 onClick={togglePlay}
-                className="h-screen w-full object-contain z-40"
+                className="max-h-screen max-w-full object-contain z-40"
               />
 
-              {/* Username (Top Left) */}
+              {/* Username */}
               <div
                 onClick={() => v.userId && router.push(`/creator/${v.userId}`)}
-                className="absolute top-2 left-2 bg-black/70 px-1 py-0.5 rounded-md cursor-pointer hover:bg-black/90 transition text-xs font-semibold text-white z-50 sm:top-4 sm:left-4"
+                className="absolute top-3 left-3 bg-black/70 px-1 py-0.5 rounded-md cursor-pointer hover:bg-black/90 transition text-xs font-semibold text-white z-50"
               >
                 @{up.username || 'unknown'}
               </div>
 
-              {/* Action buttons (Bottom Right, Vertical) */}
-              <div className="absolute bottom-2 right-2 flex flex-col items-center space-y-2 z-50 sm:bottom-4 sm:right-4">
-                <button onClick={() => handleLike(v.id)} className="text-xl sm:text-2xl">
+              {/* Action Buttons */}
+              <div className="absolute bottom-3 right-3 flex flex-col items-center space-y-2 z-50">
+                <button onClick={() => handleLike(v.id)} className="text-xl">
                   {liked ? <FaHeart className="text-red-500" /> : <FaRegHeart />}
                 </button>
-                <button className="text-xl sm:text-2xl" onClick={() => setCommentVideo(v.id)}>
+                <button className="text-xl" onClick={() => setCommentVideo(v.id)}>
                   <FaCommentDots />
                 </button>
-                <button className="text-xl sm:text-2xl">
+                <button className="text-xl">
                   <FaShare />
                 </button>
                 {v.userId !== user?.uid && (
-                  <button onClick={() => handleFollow(v.userId!)} className="text-xl sm:text-2xl">
+                  <button onClick={() => handleFollow(v.userId!)} className="text-xl">
                     {followed ? <FaUserCheck /> : <FaUserPlus />}
                   </button>
                 )}
-                <button
-                  onClick={() => setBookingVideo(v)}
-                  className="bg-green-500 hover:bg-green-600 text-white px-2 py-1 rounded text-xs sm:text-sm"
-                >
+                <button onClick={() => setBookingVideo(v)} className="bg-green-500 hover:bg-green-600 text-white px-2 py-1 rounded text-xs">
                   Book Service
                 </button>
               </div>
 
-              {/* Edit/Delete buttons for owner (Top Right) */}
+              {/* Owner Edit/Delete */}
               {isOwner && (
-                <div className="absolute top-6 right-2 flex flex-col space-y-1 z-50 sm:top-8 sm:right-4">
-                  <button
-                    onClick={() => setEditingVideo(v)}
-                    className="bg-yellow-500 hover:bg-yellow-600 text-white text-xs px-1 py-0.5 rounded sm:text-sm sm:px-2 sm:py-1"
-                  >
+                <div className="absolute top-16 right-3 flex flex-col space-y-1 z-50">
+                  <button onClick={() => setEditingVideo(v)} className="bg-yellow-500 hover:bg-yellow-600 text-white text-xs px-2 py-1 rounded">
                     Edit
                   </button>
-                  <button
-                    onClick={() => handleDelete(v.id)}
-                    className="bg-red-500 hover:bg-red-600 text-white text-xs px-1 py-0.5 rounded sm:text-sm sm:px-2 sm:py-1"
-                  >
+                  <button onClick={() => handleDelete(v.id)} className="bg-red-500 hover:bg-red-600 text-white text-xs px-2 py-1 rounded">
                     Delete
                   </button>
                 </div>
               )}
 
-              {/* Title & Description (Bottom Left) */}
+              {/* Title & Description */}
               {(v.title || v.description) && (
-                <div className="absolute bottom-2 left-2 max-w-[60%] bg-transparent px-1 py-0.5 text-shadow overflow-hidden text-ellipsis z-50 sm:bottom-4 sm:left-4 sm:max-w-[50%] sm:px-4 sm:py-3">
-                  {v.title && <h3 className="text-sm font-bold text-white sm:text-lg">{v.title}</h3>}
-                  {v.description && <p className="text-xs text-gray-200 sm:text-sm">{v.description}</p>}
+                <div className="absolute bottom-3 left-3 max-w-[60%] text-shadow overflow-hidden text-ellipsis z-50">
+                  {v.title && <h3 className="text-sm font-bold text-white">{v.title}</h3>}
+                  {v.description && <p className="text-xs text-gray-200">{v.description}</p>}
                 </div>
               )}
             </div>
@@ -373,43 +313,22 @@ export default function VideoFeed() {
         })}
       </div>
 
-      {/* Scroll buttons (only shown when slider is ready) */}
-      {isSliderReady && (
-        <div className="absolute right-2 top-1/2 transform -translate-y-1/2 hidden sm:flex flex-col space-y-2 z-50 sm:right-4">
-          <button
-            onClick={scrollPrev}
-            className="bg-white/20 hover:bg-white/40 p-1 rounded-full text-white sm:p-2"
-          >
+      {/* Scroll Buttons */}
+      {isSliderReady && sliderInstanceRef.current && (
+        <div className="absolute right-3 top-1/2 transform -translate-y-1/2 hidden sm:flex flex-col space-y-2 z-50">
+          <button onClick={scrollPrev} className="bg-white/20 hover:bg-white/40 p-1 rounded-full text-white">
             <FaChevronUp />
           </button>
-          <button
-            onClick={scrollNext}
-            className="bg-white/20 hover:bg-white/40 p-1 rounded-full text-white sm:p-2"
-          >
+          <button onClick={scrollNext} className="bg-white/20 hover:bg-white/40 p-1 rounded-full text-white">
             <FaChevronDown />
           </button>
         </div>
       )}
 
-      {authDialogOpen && (
-        <AuthModal open={authDialogOpen} onClose={() => setAuthDialogOpen(false)} />
-      )}
-
-      {commentVideo && (
-        <CommentModal videoId={commentVideo} onClose={() => setCommentVideo(null)} />
-      )}
-
-      {bookingVideo && (
-        <BookingModal
-          video={bookingVideo}
-          creator={userProfiles[bookingVideo.userId!] ?? {}}
-          onClose={() => setBookingVideo(null)}
-        />
-      )}
-
-      {editingVideo && (
-        <EditVideoModal video={editingVideo} onClose={() => setEditingVideo(null)} />
-      )}
+      {authDialogOpen && <AuthModal open={authDialogOpen} onClose={() => setAuthDialogOpen(false)} />}
+      {commentVideo && <CommentModal videoId={commentVideo} onClose={() => setCommentVideo(null)} />}
+      {bookingVideo && <BookingModal video={bookingVideo} creator={userProfiles[bookingVideo.userId!] ?? {}} onClose={() => setBookingVideo(null)} />}
+      {editingVideo && <EditVideoModal video={editingVideo} onClose={() => setEditingVideo(null)} />}
     </div>
   );
 }

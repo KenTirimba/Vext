@@ -2,7 +2,7 @@
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { db } from '@/lib/firebase';
-import { doc, updateDoc, getDoc } from 'firebase/firestore';
+import { doc, updateDoc, getDoc, increment } from 'firebase/firestore';
 
 export async function POST(request: Request) {
   const payload = await request.text();
@@ -53,16 +53,22 @@ export async function POST(request: Request) {
     const { uid } = metadata || {};
     if (uid) {
       const wRef = doc(db, `users/${uid}/withdrawals`, reference);
-      await updateDoc(wRef, { status: 'success' });
+      await updateDoc(wRef, { status: 'success', completedAt: new Date() });
     }
   }
 
-  // ❌ Withdrawal failed
+  // ❌ Withdrawal failed → refund wallet
   if (event === 'transfer.failed') {
-    const { uid } = metadata || {};
+    const { uid, amount, fee } = metadata || {};
     if (uid) {
       const wRef = doc(db, `users/${uid}/withdrawals`, reference);
-      await updateDoc(wRef, { status: 'failed' });
+      await updateDoc(wRef, { status: 'failed', failedAt: new Date() });
+
+      // Refund wallet
+      const userRef = doc(db, 'users', uid);
+      await updateDoc(userRef, {
+        'wallet.available': increment(amount + fee), // refund full deducted amount
+      });
     }
   }
 

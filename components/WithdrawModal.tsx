@@ -2,8 +2,6 @@
 
 import { useState } from 'react';
 import { auth } from '@/lib/firebase';
-import paystackFeeRates from '@/lib/paystackFeeRates';
-import SetWithdrawalPin from './SetWithdrawalPin';
 
 interface WithdrawModalProps {
   available: number;
@@ -12,16 +10,22 @@ interface WithdrawModalProps {
 
 export default function WithdrawModal({ available, onClose }: WithdrawModalProps) {
   const [amount, setAmount] = useState<number>(0);
-  const [method, setMethod] = useState<'bank' | 'mobile'>('bank');
   const [fee, setFee] = useState<number>(0);
   const [pin, setPin] = useState('');
   const [loading, setLoading] = useState(false);
-  const [showPinSetup, setShowPinSetup] = useState(false);
+
+  const calculateFee = (val: number): number => {
+    if (val <= 1500) return 20;
+    if (val <= 20000) return 40;
+    if (val <= 40000) return 140;
+    if (val <= 999999) return 180;
+    return 350;
+  };
 
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = Number(e.target.value);
     setAmount(val);
-    setFee(paystackFeeRates.getTransferFee('KENYA', method, val));
+    setFee(calculateFee(val));
   };
 
   const handleSubmit = async () => {
@@ -35,10 +39,10 @@ export default function WithdrawModal({ available, onClose }: WithdrawModalProps
       body: JSON.stringify({
         uid: auth.currentUser!.uid,
         amount,
-        method,
-        pin
-      })
+        pin,
+      }),
     });
+
     const data = await res.json();
     setLoading(false);
     if (!res.ok) return alert(data.error || 'Withdrawal failed');
@@ -62,17 +66,8 @@ export default function WithdrawModal({ available, onClose }: WithdrawModalProps
           max={available}
         />
 
-        <label className="block mb-2">Method</label>
-        <select
-          value={method}
-          onChange={e => setMethod(e.target.value as 'bank' | 'mobile')}
-          className="w-full border rounded px-3 py-2 mb-4"
-        >
-          <option value="bank">Bank Transfer</option>
-          <option value="mobile">Mobile Money</option>
-        </select>
-
-        <p className="mb-4">Estimated Fee: KSHS {fee}</p>
+        <p className="mb-2">M-PESA Withdrawal</p>
+        <p className="mb-2">Fee: KSHS {fee}</p>
         <p className="mb-4 font-semibold">Total Deducted: KSHS {amount + fee}</p>
 
         <label className="block mb-2">PIN</label>
@@ -90,15 +85,6 @@ export default function WithdrawModal({ available, onClose }: WithdrawModalProps
         >
           {loading ? 'Processing...' : 'Confirm Withdrawal'}
         </button>
-
-        <p className="mt-4 text-sm">
-          Don’t have a PIN?{' '}
-          <button onClick={() => setShowPinSetup(true)} className="text-blue-600 underline">
-            Set up PIN
-          </button>
-        </p>
-
-        {showPinSetup && <SetWithdrawalPin />}
       </div>
     </div>
   );
