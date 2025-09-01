@@ -6,8 +6,6 @@ import {
 } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 import { useAuthState } from 'react-firebase-hooks/auth';
-import { useKeenSlider } from 'keen-slider/react';
-import 'keen-slider/keen-slider.min.css';
 import {
   FaChevronDown,
   FaChevronUp,
@@ -32,6 +30,7 @@ interface VideoDoc {
   serviceCost?: number;
   addons?: { name: string; cost: number; unit: string }[];
   id: string;
+  videoId?: string; // ✅ added so Share uses it
 }
 
 interface UserProfile {
@@ -39,55 +38,104 @@ interface UserProfile {
   profilePhoto?: string;
   isServiceProvider?: boolean;
   location?: string;
+  businessName?: string;
 }
 
 export default function VideoFeed() {
   const [user] = useAuthState(auth);
   const [videos, setVideos] = useState<VideoDoc[]>([]);
+  const [allVideos, setAllVideos] = useState<VideoDoc[]>([]);
   const [userProfiles, setUserProfiles] = useState<Record<string, UserProfile>>({});
   const [likesMap, setLikesMap] = useState<Record<string, boolean>>({});
   const [followMap, setFollowMap] = useState<Record<string, boolean>>({});
   const [commentVideo, setCommentVideo] = useState<string | null>(null);
   const [bookingVideo, setBookingVideo] = useState<VideoDoc | null>(null);
   const [editingVideo, setEditingVideo] = useState<VideoDoc | null>(null);
+
+  // Reuse the same refs/state names, but now for a scroll-snap container
+  const sliderRef = useRef<HTMLDivElement | null>(null);
   const sliderInstanceRef = useRef<any>(null);
   const [isSliderReady, setIsSliderReady] = useState(false);
+
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [authDialogOpen, setAuthDialogOpen] = useState(false);
   const [isProvider, setIsProvider] = useState(false);
   const [username, setUsername] = useState('');
   const router = useRouter();
 
-  const [sliderRef, instanceRef] = useKeenSlider<HTMLDivElement>({
-    vertical: true,
-    loop: true,
-    slides: { perView: 1 },
-    rubberband: false,
-    slideChanged(slider) {
-      const i = slider.track.details.rel;
-      slider.container.querySelectorAll('video').forEach((v, idx) => {
-        const el = v as HTMLVideoElement;
-        idx === i ? el.play().catch(() => {}) : el.pause();
-      });
-    },
-    created(slider) {
-      sliderInstanceRef.current = slider;
-      setIsSliderReady(true);
-    },
-  });
-
+  // Initialize "instance" and ready flag when DOM is mounted / videos change
   useEffect(() => {
-    if (instanceRef.current) {
-      sliderInstanceRef.current = instanceRef.current;
+    if (sliderRef.current) {
+      sliderInstanceRef.current = sliderRef.current; // truthy so existing checks still work
       setIsSliderReady(true);
     }
-  }, [instanceRef]);
+  }, [videos.length]);
+
+  // Play/pause currently visible video (≈ keen-slider slideChanged)
+  useEffect(() => {
+    const root = sliderRef.current;
+    if (!root) return;
+
+    const videosEls = Array.from(root.querySelectorAll('video')) as HTMLVideoElement[];
+    // Pause all initially
+    videosEls.forEach(v => v.pause());
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          const vid = entry.target as HTMLVideoElement;
+          if (entry.isIntersecting && entry.intersectionRatio >= 0.6) {
+            vid.play().catch(() => {});
+          } else {
+            vid.pause();
+          }
+        });
+      },
+      { root, threshold: [0, 0.6, 1] }
+    );
+
+    videosEls.forEach((v) => observer.observe(v));
+    return () => observer.disconnect();
+  }, [videos.map(v => v.id).join('|')]);
+
+  // One-video-per-wheel step (like the plugin), throttled
+  useEffect(() => {
+    const el = sliderRef.current;
+    if (!el) return;
+
+    let wheelActive = false;
+    let wheelTimeout: ReturnType<typeof setTimeout> | undefined;
+
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      if (wheelActive) return;
+      wheelActive = true;
+
+      if (e.deltaY > 0) scrollNext();
+      else if (e.deltaY < 0) scrollPrev();
+
+      clearTimeout(wheelTimeout);
+      wheelTimeout = setTimeout(() => {
+        wheelActive = false;
+      }, 120);
+    };
+
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => {
+      el.removeEventListener('wheel', onWheel as EventListener);
+      clearTimeout(wheelTimeout);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSliderReady, videos.length]);
 
   useEffect(() => {
     (async () => {
       const snap = await getDocs(query(collection(db, 'videos'), orderBy('createdAt', 'desc')));
       const docs = snap.docs.map(d => ({ ...(d.data() as VideoDoc), id: d.id }));
-      setVideos(docs);
+      console.log("Loaded videos:", docs);
+      setAllVideos(docs);
+      const shuffledVideos = [...docs].sort(() => Math.random() - 0.5);
+      setVideos(shuffledVideos);
 
       const uids = [...new Set(docs.map(v => v.userId).filter(Boolean))];
       const profiles: Record<string, UserProfile> = {};
@@ -128,6 +176,46 @@ export default function VideoFeed() {
     });
   }, [user]);
 
+  // Infinite scroll down
+  useEffect(() => {
+    const el = sliderRef.current;
+    if (!el || allVideos.length === 0) return;
+
+    const threshold = 3 * (el.clientHeight || window.innerHeight);
+
+    const handleScrollDown = () => {
+      const { scrollTop, scrollHeight, clientHeight } = el;
+      if (scrollHeight - (scrollTop + clientHeight) < threshold) {
+        const newShuffled = [...allVideos].sort(() => Math.random() - 0.5);
+        setVideos(prev => [...prev, ...newShuffled]);
+      }
+    };
+
+    el.addEventListener('scroll', handleScrollDown);
+    return () => el.removeEventListener('scroll', handleScrollDown);
+  }, [allVideos]);
+
+  // Infinite scroll up
+  useEffect(() => {
+    const el = sliderRef.current;
+    if (!el || allVideos.length === 0) return;
+
+    const threshold = 3 * (el.clientHeight || window.innerHeight);
+
+    const handleScrollUp = () => {
+      const { scrollTop, clientHeight } = el;
+      if (scrollTop < threshold) {
+        const newShuffled = [...allVideos].sort(() => Math.random() - 0.5);
+        setVideos(prev => [...newShuffled, ...prev]);
+        const addedHeight = newShuffled.length * clientHeight;
+        el.scrollTop += addedHeight;
+      }
+    };
+
+    el.addEventListener('scroll', handleScrollUp);
+    return () => el.removeEventListener('scroll', handleScrollUp);
+  }, [allVideos]);
+
   const handleSignOut = async () => {
     await auth.signOut();
     setDropdownOpen(false);
@@ -159,23 +247,50 @@ export default function VideoFeed() {
     if (!confirm('Are you sure you want to delete this upload?')) return;
     await deleteDoc(doc(db, 'videos', videoId));
     setVideos(prev => prev.filter(v => v.id !== videoId));
+    setAllVideos(prev => prev.filter(v => v.id !== videoId));
+  };
+
+  // NEW: compute current slide index from scrollTop
+  const getCurrentIndex = (el: HTMLDivElement) => {
+    const h = el.clientHeight || window.innerHeight;
+    return Math.round(el.scrollTop / h);
   };
 
   const scrollNext = () => {
-    if (sliderInstanceRef.current && typeof sliderInstanceRef.current.next === 'function') {
-      sliderInstanceRef.current.next();
-    }
+    const el = sliderRef.current;
+    if (!el || videos.length === 0) return;
+    const h = el.clientHeight || window.innerHeight;
+    const idx = getCurrentIndex(el);
+    const next = idx + 1;
+    el.scrollTo({
+      top: next * h,
+      behavior: 'smooth',
+    });
   };
 
   const scrollPrev = () => {
-    if (sliderInstanceRef.current && typeof sliderInstanceRef.current.prev === 'function') {
-      sliderInstanceRef.current.prev();
-    }
+    const el = sliderRef.current;
+    if (!el || videos.length === 0) return;
+    const h = el.clientHeight || window.innerHeight;
+    const idx = getCurrentIndex(el);
+    const prev = idx - 1;
+    el.scrollTo({
+      top: prev * h,
+      behavior: 'smooth',
+    });
   };
 
   const togglePlay = (e: React.MouseEvent<HTMLVideoElement>) => {
     const v = e.currentTarget;
     v.paused ? v.play().catch(() => {}) : v.pause();
+  };
+
+  // ✅ share handler
+  const handleShare = (video: VideoDoc) => {
+    const link = `${window.location.origin}/video/${video.videoId || video.id}`;
+    navigator.clipboard.writeText(link).then(() => {
+      alert('Link copied to clipboard!');
+    });
   };
 
   return (
@@ -242,15 +357,19 @@ export default function VideoFeed() {
         </div>
       </div>
 
-      <div ref={sliderRef} className="keen-slider h-screen">
-        {videos.map(v => {
+      {/* Scroll-snap container */}
+      <div
+        ref={sliderRef}
+        className="h-screen overflow-y-scroll snap-y snap-mandatory scroll-smooth [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+      >
+        {videos.map((v, i) => {
           const up = userProfiles[v.userId || ''] || {};
           const liked = likesMap[v.id];
           const followed = up && user ? followMap[v.userId!] : false;
           const isOwner = v.userId === user?.uid;
 
           return (
-            <div key={v.id} className="keen-slider__slide relative h-screen flex items-center justify-center">
+            <div key={`${v.id}-${i}`} className="relative h-screen flex items-center justify-center snap-start">
               <video
                 src={v.url}
                 muted
@@ -265,7 +384,7 @@ export default function VideoFeed() {
                 onClick={() => v.userId && router.push(`/creator/${v.userId}`)}
                 className="absolute top-3 left-3 bg-black/70 px-1 py-0.5 rounded-md cursor-pointer hover:bg-black/90 transition text-xs font-semibold text-white z-50"
               >
-                @{up.username || 'unknown'}
+                {up.businessName ? up.businessName : `@${up.username || 'unknown'}`}
               </div>
 
               {/* Action Buttons */}
@@ -276,7 +395,7 @@ export default function VideoFeed() {
                 <button className="text-xl" onClick={() => setCommentVideo(v.id)}>
                   <FaCommentDots />
                 </button>
-                <button className="text-xl">
+                <button className="text-xl" onClick={() => handleShare(v)}>
                   <FaShare />
                 </button>
                 {v.userId !== user?.uid && (

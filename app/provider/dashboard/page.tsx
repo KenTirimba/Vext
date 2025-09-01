@@ -3,35 +3,74 @@
 import { useState, useEffect } from 'react';
 import { auth, db } from '@/lib/firebase';
 import { useAuthState } from 'react-firebase-hooks/auth';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc, getDoc } from 'firebase/firestore';
 import WithdrawModal from '@/components/WithdrawModal';
 import WithdrawalHistory from '@/components/WithdrawalHistory';
+import PayoutSettingsModal from '@/components/PayoutSettingsModal';
 
 export default function ProviderDashboard() {
   const [user] = useAuthState(auth);
   const [loading, setLoading] = useState(true);
   const [balance, setBalance] = useState(0);
   const [showWithdraw, setShowWithdraw] = useState(false);
+  const [showPayoutSettings, setShowPayoutSettings] = useState(false);
+  const [hasPayoutSettings, setHasPayoutSettings] = useState<boolean | null>(null);
 
+  // 🔍 Check if provider has payout settings
+  useEffect(() => {
+    if (!user) return;
+    const userRef = doc(db, 'users', user.uid);
+
+    getDoc(userRef).then((snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        if (data.payout_method === "mpesa" && data.payout_phone) {
+          setHasPayoutSettings(true);
+        } else {
+          setHasPayoutSettings(false);
+        }
+      } else {
+        setHasPayoutSettings(false);
+      }
+    });
+  }, [user]);
+
+  // 🔍 Compute balance dynamically from accepted + completed bookings
   useEffect(() => {
     if (!user) return;
 
-    const userRef = doc(db, 'users', user.uid);
+    const bookingsRef = collection(db, 'bookings');
+    const q = query(
+      bookingsRef,
+      where('providerId', '==', user.uid),
+      where('status', 'in', ['accepted', 'completed']) // ✅ include both
+    );
 
-    // ✅ Real-time listener for wallet balance
-    const unsubscribe = onSnapshot(userRef, (snapshot) => {
-      if (snapshot.exists()) {
-        const data = snapshot.data();
-        setBalance(data.wallet?.available || 0);
-      }
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      let total = 0;
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        console.log("Booking Data:", doc.id, data); // 👀 Debug Firestore results
+        total += data.total || 0; // ✅ use "total" field
+      });
+      console.log("Computed Balance:", total); // 👀 Debug computed balance
+      setBalance(total);
       setLoading(false);
     });
 
-    return () => unsubscribe(); // cleanup on unmount
+    return () => unsubscribe();
   }, [user]);
 
   if (!user) return <p className="p-6">Please sign in to view this page.</p>;
   if (loading) return <p className="p-6">Loading balance…</p>;
+
+  const handleWithdrawClick = () => {
+    if (hasPayoutSettings) {
+      setShowWithdraw(true);
+    } else {
+      setShowPayoutSettings(true);
+    }
+  };
 
   return (
     <div className="p-6 max-w-2xl mx-auto">
@@ -45,18 +84,29 @@ export default function ProviderDashboard() {
 
       {/* Withdraw funds button */}
       <button
-        onClick={() => setShowWithdraw(true)}
+        onClick={handleWithdrawClick}
         className="w-full py-2 bg-green-600 text-white rounded hover:bg-green-700"
       >
         Withdraw Funds
       </button>
 
-      {/* Withdraw modal */}
-      {showWithdraw && (
+      {/* Withdraw modal — ✅ only render if payout settings exist */}
+      {showWithdraw && hasPayoutSettings && (
         <WithdrawModal
           available={balance}
           onClose={() => setShowWithdraw(false)}
-          onWithdrawSuccess={() => {}} // no need anymore, real-time sync
+        />
+      )}
+
+      {/* Payout settings modal */}
+      {showPayoutSettings && (
+        <PayoutSettingsModal
+          onClose={() => setShowPayoutSettings(false)}
+          onSetupSuccess={() => {
+            setHasPayoutSettings(true);
+            setShowPayoutSettings(false);
+            setShowWithdraw(true); // ✅ open withdraw immediately after setup
+          }}
         />
       )}
 

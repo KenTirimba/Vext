@@ -18,23 +18,16 @@ interface Addon {
 interface VideoDoc {
   serviceCost?: number;
   addons?: Addon[];
-  userId?: string;
-  id?: string;
-}
-
-interface UserProfile {
-  location?: string;
-  phone?: string;
-  name?: string;
+  userId?: string;  // providerId
+  id?: string;      // videoId
 }
 
 interface BookingModalProps {
   video: VideoDoc;
-  creator: UserProfile;
   onClose: () => void;
 }
 
-export default function BookingModal({ video, creator, onClose }: BookingModalProps) {
+export default function BookingModal({ video, onClose }: BookingModalProps) {
   const [user] = useAuthState(auth);
   const [profileComplete, setProfileComplete] = useState(false);
   const [step, setStep] = useState(1);
@@ -43,6 +36,8 @@ export default function BookingModal({ video, creator, onClose }: BookingModalPr
   const [addonSelections, setAddonSelections] = useState<Record<string, number>>({});
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<'paystack' | 'mpesa' | ''>(''); // ✅ existing
+  const [mpesaPhone, setMpesaPhone] = useState(''); // ✅ NEW: number to be charged
 
   const base = video.serviceCost || 0;
   const addons = video.addons || [];
@@ -53,12 +48,15 @@ export default function BookingModal({ video, creator, onClose }: BookingModalPr
 
   useEffect(() => {
     if (!user) return;
+
+    // ✅ fetch client profile
     getDoc(doc(db, 'users', user.uid)).then(snap => {
       if (snap.exists()) {
         const d = snap.data() as any;
         setProfileComplete(!!d.fullName && !!d.phone);
         setName(d.fullName || '');
         setPhone(d.phone || '');
+        setMpesaPhone(d.phone || ''); // ✅ prefill charge number with saved phone
       }
     });
   }, [user]);
@@ -66,15 +64,57 @@ export default function BookingModal({ video, creator, onClose }: BookingModalPr
   const handleProfileSave = async () => {
     if (!user) return alert('You must be signed in');
     if (!name.trim() || !phone) return alert('Name & phone are required');
+
     await updateDoc(doc(db, 'users', user.uid), { fullName: name.trim(), phone });
-    setProfileComplete(true);
+
+    // ✅ re-fetch after save
+    const snap = await getDoc(doc(db, 'users', user.uid));
+    if (snap.exists()) {
+      const d = snap.data() as any;
+      setProfileComplete(!!d.fullName && !!d.phone);
+      setName(d.fullName || '');
+      setPhone(d.phone || '');
+      setMpesaPhone(d.phone || ''); // ✅ keep in sync
+    }
   };
+
+  // ✅ NEW: normalize phone to 2547XXXXXXXX for STK
+  function normalizeKeMpesaPhone(raw: string) {
+    let p = (raw || '').trim();
+    if (!p) throw new Error('Please enter the M-Pesa phone number to charge');
+
+    // strip spaces and non-digits except leading '+'
+    p = p.replace(/\s+/g, '');
+    if (p.startsWith('+')) p = p.slice(1);
+
+    // map common forms to 2547XXXXXXXX
+    if (p.startsWith('0')) {
+      // 07XXXXXXXX -> 2547XXXXXXXX
+      p = `254${p.slice(1)}`;
+    } else if (p.startsWith('7')) {
+      // 7XXXXXXXX -> 2547XXXXXXXX
+      p = `254${p}`;
+    } else if (p.startsWith('254')) {
+      // already in 254...
+    } else {
+      throw new Error('Enter a valid KE number e.g. 2547XXXXXXXX');
+    }
+
+    // digits only
+    p = p.replace(/\D/g, '');
+
+    if (!(p.length === 12 && p.startsWith('2547'))) {
+      throw new Error('Invalid Safaricom number. Use format 2547XXXXXXXX');
+    }
+
+    return p;
+  }
 
   const handlePay = async () => {
     if (!profileComplete) return;
+    if (!paymentMethod) return alert('Please select a payment method');
 
     try {
-      // Step 1: Save booking first
       const bookingData = {
         clientId: user!.uid,
         providerId: video.userId,
@@ -83,14 +123,9 @@ export default function BookingModal({ video, creator, onClose }: BookingModalPr
         time: selectedTime,
         total,
         addons: addonSelections,
-        addonsSelected: Object.keys(addonSelections),
-        status: 'pending', // Payment not confirmed yet
-        clientPhone: phone,
-        providerPhone: creator.phone,
-        clientName: name,
-        creatorName: creator.name,
       };
 
+      // ✅ save booking first
       const saveRes = await fetch('/api/save-booking', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -102,38 +137,84 @@ export default function BookingModal({ video, creator, onClose }: BookingModalPr
 
       const bookingId = saveData.bookingId;
 
-      // Step 2: Create Paystack transaction with bookingId in metadata
-      const initRes = await fetch('/api/paystack/init', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: user?.email,
-          amount: total,
-          metadata: { bookingId }, // ✅ Important
-        }),
-      });
+      if (paymentMethod === 'paystack') {
+        // ✅ create Paystack transaction
+        const initRes = await fetch('/api/paystack/init', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: user?.email,
+            amount: total,
+            metadata: { bookingId },
+          }),
+        });
 
-      const initData = await initRes.json();
-      if (!initRes.ok) throw new Error(initData.error || 'Payment init failed');
+        const initData = await initRes.json();
+        if (!initRes.ok) throw new Error(initData.error || 'Payment init failed');
 
-      // Step 3: Open Paystack Inline Popup
-      const paystackHandler = (window as any).PaystackPop.setup({
-        key: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY,
-        email: user?.email,
-        amount: total * 100,
-        currency: 'KES',
-        ref: initData.reference,
-        metadata: { bookingId },
-        callback: () => {
-          alert('Payment processing... We will confirm your booking shortly.');
-          onClose();
-        },
-        onClose: () => {
-          alert('Payment window closed');
+        const PaystackPop = (window as any).PaystackPop;
+        if (!PaystackPop) {
+          alert("Payment system not loaded. Please refresh.");
+          return;
         }
-      });
 
-      paystackHandler.openIframe();
+        const paystackHandler = PaystackPop.setup({
+          key: process.env.NEXT_PUBLIC_PAYSTACK_KEY,
+          email: user?.email,
+          amount: total * 100,
+          currency: 'KES',
+          ref: initData.reference,
+          metadata: { bookingId },
+          callback: (response: any) => {
+            (async () => {
+              try {
+                await fetch('/api/confirm-booking', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    bookingId,
+                    paymentRef: response.reference,
+                  }),
+                });
+
+                alert('Payment successful! Your booking is confirmed.');
+                onClose();
+              } catch (err) {
+                console.error('Confirm booking error:', err);
+                alert('Payment went through but booking confirmation failed.');
+              }
+            })();
+          },
+          onClose: () => {
+            alert('Payment window closed');
+          }
+        });
+
+        paystackHandler.openIframe();
+      }
+
+      if (paymentMethod === 'mpesa') {
+        // ✅ Use the number the user wants to be charged
+        const msisdn = normalizeKeMpesaPhone(mpesaPhone || phone);
+
+        // ✅ Call your Daraja STK Push API
+        const mpesaRes = await fetch('/api/mpesa/init', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            phoneNumber: msisdn,
+            amount: total,
+            bookingId,
+          }),
+        });
+
+        const mpesaData = await mpesaRes.json();
+        if (!mpesaRes.ok) throw new Error(mpesaData.error || 'M-Pesa init failed');
+
+        alert('M-Pesa STK Push sent to your phone. Please complete payment.');
+        onClose();
+      }
+
     } catch (err: any) {
       alert(err.message);
     }
@@ -241,8 +322,37 @@ export default function BookingModal({ video, creator, onClose }: BookingModalPr
             <h2 className="text-lg font-bold mb-3">Confirm Booking</h2>
             <p>Date: {selectedDate.toDateString()}</p>
             <p>Time: {selectedTime}</p>
-            <p>Provider location: {creator.location || 'N/A'}</p>
             <p>Total Cost: KSHS {total}</p>
+
+            {/* ✅ Payment Method Choice */}
+            <div className="mt-4">
+              <label className="block font-semibold">Select Payment Method:</label>
+              <select
+                className="w-full border rounded px-2 py-1 mt-2"
+                value={paymentMethod}
+                onChange={(e) => setPaymentMethod(e.target.value as 'paystack' | 'mpesa')}
+              >
+                <option value="">-- choose --</option>
+                <option value="paystack">Pay with Card (Paystack)</option>
+                <option value="mpesa">Pay with M-Pesa</option>
+              </select>
+            </div>
+
+            {/* ✅ NEW: Let user type the M-Pesa number they want to charge */}
+            {paymentMethod === 'mpesa' && (
+              <div className="mt-3">
+                <label className="block font-semibold">M-Pesa phone to charge</label>
+                <input
+                  type="tel"
+                  placeholder="2547XXXXXXXX"
+                  className="w-full border rounded px-2 py-1 mt-2"
+                  value={mpesaPhone}
+                  onChange={(e) => setMpesaPhone(e.target.value)}
+                />
+                <p className="text-xs text-gray-600 mt-1">Use format 2547XXXXXXXX (no + sign).</p>
+              </div>
+            )}
+
             <button
               onClick={handlePay}
               className="mt-4 w-full bg-blue-600 text-white py-2 rounded"

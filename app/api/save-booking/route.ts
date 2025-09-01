@@ -1,7 +1,25 @@
-// app/api/save-booking/route.ts
-import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/firebase';
-import { addDoc, collection } from 'firebase/firestore';
+import { NextRequest, NextResponse } from "next/server";
+import { adminDb } from "@/lib/firebaseAdmin";
+
+// helper: generate short code like "42AB"
+function generateShortId() {
+  const letters = "ABCDEFGHJKLMNPQRSTUVWXYZ"; // no confusing chars
+  const digits = "0123456789";
+  let result = "";
+
+  // first two: digits
+  for (let i = 0; i < 2; i++) {
+    result += digits.charAt(Math.floor(Math.random() * digits.length));
+  }
+
+  // last two: letters or digits
+  const mixed = letters + digits;
+  for (let i = 0; i < 2; i++) {
+    result += mixed.charAt(Math.floor(Math.random() * mixed.length));
+  }
+
+  return result;
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -14,35 +32,47 @@ export async function POST(req: NextRequest) {
       total,
       addons,
       clientPhone,
-      providerPhone,
       clientName,
-      creatorName,
     } = await req.json();
 
     if (!clientId || !providerId || !videoId || !date || !time || !total) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
-    // Save booking to Firestore as pending until payment confirmation
-    const bookingRef = await addDoc(collection(db, 'bookings'), {
+    // Get provider details
+    const providerSnap = await adminDb.collection("users").doc(providerId).get();
+    if (!providerSnap.exists) {
+      return NextResponse.json({ error: "Provider not found" }, { status: 404 });
+    }
+    const provider = providerSnap.data();
+
+    if (!provider?.businessPhone) {
+      return NextResponse.json({ error: "Provider business phone is missing" }, { status: 400 });
+    }
+
+    const shortId = generateShortId();
+
+    // Save booking
+    const bookingRef = await adminDb.collection("bookings").add({
       clientId,
       providerId,
       videoId,
       date,
       time,
       total,
-      addons,
-      status: 'pending', // Will be updated to "confirmed" after payment success
+      addons: addons || [],
+      status: "pending",
       createdAt: Date.now(),
-      clientPhone,
-      providerPhone,
-      clientName,
-      creatorName,
+      clientPhone: clientPhone || null,
+      providerPhone: provider.businessPhone,
+      clientName: clientName || "",
+      creatorName: provider.fullName || provider.username || "Unknown",
+      shortId, // ✅ store memorable ID
     });
 
-    return NextResponse.json({ bookingId: bookingRef.id }, { status: 200 });
+    return NextResponse.json({ bookingId: bookingRef.id, shortId }, { status: 200 });
   } catch (err: any) {
-    console.error('save-booking error:', err?.message || err);
-    return NextResponse.json({ error: err?.message || 'Unknown error' }, { status: 500 });
+    console.error("save-booking error:", err?.message || err);
+    return NextResponse.json({ error: err?.message || "Unknown error" }, { status: 500 });
   }
 }

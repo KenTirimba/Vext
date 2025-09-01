@@ -11,7 +11,8 @@ import 'react-calendar/dist/Calendar.css';
 interface Booking {
   id: string;
   status?: string;
-  [key: string]: any; // allow extra fields
+  shortId?: string; // ✅ added
+  [key: string]: any;
 }
 
 export default function ClientBookings() {
@@ -60,7 +61,7 @@ export default function ClientBookings() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         to: [rescheduling.clientPhone, rescheduling.providerPhone],
-        message: `Booking rescheduled to ${newDate.toDateString()} at ${newTime}.`,
+        message: `Booking #${rescheduling.shortId || rescheduling.id} rescheduled to ${newDate.toDateString()} at ${newTime}.`,
       }),
     });
     setRescheduling(null);
@@ -73,6 +74,7 @@ export default function ClientBookings() {
         <h2 className="text-xl">Active / Pending</h2>
         {active.map(b => (
           <div key={b.id} className="border p-3 mb-3">
+            <p><strong>Booking ID:</strong> {b.shortId || b.id}</p>
             <p>Date: {new Date(b.date).toLocaleDateString()}</p>
             <p>Time: {b.time}</p>
             <p>Total: KSHS {b.total}</p>
@@ -85,6 +87,7 @@ export default function ClientBookings() {
         <h2 className="text-xl">Completed & Past</h2>
         {completed.map(b => (
           <div key={b.id} className="border p-3 mb-3">
+            <p><strong>Booking ID:</strong> {b.shortId || b.id}</p>
             <p>Date: {new Date(b.date).toLocaleDateString()}</p>
             <p>Time: {b.time}</p>
             <p>Total: KSHS {b.total}</p>

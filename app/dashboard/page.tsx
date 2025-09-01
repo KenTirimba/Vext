@@ -18,7 +18,7 @@ export default function DashboardPage() {
 
   return (
     <main className="bg-black text-white min-h-screen">
-      <div className="pt-20">
+      <div>
         <VideoFeed />
       </div>
     </main>

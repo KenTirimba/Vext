@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { auth, db, storage } from '../lib/firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { collection, addDoc } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, doc } from 'firebase/firestore';
 import { useAuthState } from 'react-firebase-hooks/auth';
 
 interface Addon {
@@ -43,7 +43,8 @@ export function UploadModal({ onClose }: { onClose: () => void }) {
 
     const validAddons = addons.filter(a => a.name && a.unit && a.cost > 0);
 
-    await addDoc(collection(db, 'videos'), {
+    // ✅ create new doc
+    const docRef = await addDoc(collection(db, 'videos'), {
       userId: user.uid,
       title,
       description,
@@ -52,6 +53,11 @@ export function UploadModal({ onClose }: { onClose: () => void }) {
       timeTaken: { hours, minutes },
       addons: validAddons,
       createdAt: Date.now(),
+    });
+
+    // ✅ store the document ID inside the doc for easy retrieval
+    await updateDoc(doc(db, 'videos', docRef.id), {
+      videoId: docRef.id,
     });
 
     onClose();
@@ -122,7 +128,7 @@ export function UploadModal({ onClose }: { onClose: () => void }) {
 
         <div className="border rounded p-3">
           <div className="flex justify-between items-center mb-2">
-            <h3 className="font-semibold">Add‑ons</h3>
+            <h3 className="font-semibold">Add-ons</h3>
             <button
               onClick={handleAddAddon}
               className="text-blue-600 font-bold text-xl leading-none"

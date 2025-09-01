@@ -20,7 +20,7 @@ export default function LandingPage() {
 
   return (
     <main className="bg-black text-white min-h-screen">
-      <div className="pt-20">
+      <div>
         <VideoFeed />
       </div>
       <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} />

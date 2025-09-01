@@ -15,6 +15,7 @@ export default function ProfilePage() {
   const [username, setUsername] = useState('');
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
+  const [businessPhone, setBusinessPhone] = useState('');
   const [email, setEmail] = useState('');
   const [gender, setGender] = useState('');
   const [location, setLocation] = useState('');
@@ -41,6 +42,7 @@ export default function ProfilePage() {
         setUsername(d.username || '');
         setFullName(d.fullName || '');
         setPhone(d.phone || '');
+        setBusinessPhone(d.businessPhone || '');
         setEmail(d.email || user.email || '');
         setGender(d.gender || '');
         setLocation(d.location || '');
@@ -66,8 +68,8 @@ export default function ProfilePage() {
     if (!fullName.trim() || !phone) {
       return alert('Full name and phone number are required.');
     }
-    if (isProvider && (!businessName || !services || !operatingHours || !bio)) {
-      return alert('Please fill in all service provider details.');
+    if (isProvider && (!businessName || !services || !operatingHours || !bio || !businessPhone)) {
+      return alert('Please fill in all service provider details, including business phone.');
     }
 
     const updates: any = {
@@ -80,6 +82,7 @@ export default function ProfilePage() {
       isProvider,
     };
     if (isProvider) {
+      updates.businessPhone = businessPhone;
       updates.businessName = businessName;
       updates.services = services;
       updates.operatingHours = operatingHours;
@@ -126,6 +129,7 @@ export default function ProfilePage() {
     <div className="pt-20 max-w-lg mx-auto p-4 space-y-6 bg-white rounded-lg mt-10 shadow-md">
       <h2 className="text-2xl font-semibold">Profile Settings</h2>
 
+      {/* Profile Photo */}
       <div className="flex items-center space-x-4">
         {profilePhotoUrl ? (
           <img src={profilePhotoUrl} alt="profile" className="w-16 h-16 rounded-full" />
@@ -139,6 +143,7 @@ export default function ProfilePage() {
         />
       </div>
 
+      {/* Basic Fields */}
       <label className="block">
         <span>Full Name*:</span>
         <input
@@ -161,7 +166,7 @@ export default function ProfilePage() {
       </label>
 
       <label className="block">
-        <span>Phone Number*:</span>
+        <span>Phone Number* (Personal):</span>
         <PhoneInput
           international
           defaultCountry="KE"
@@ -236,36 +241,20 @@ export default function ProfilePage() {
             }}
           />
 
+          {/* Business Phone */}
           <label className="block">
-            <span>Street / Building / Floor / Room:</span>
-            <input
-              type="text"
-              className="mt-1 w-full border rounded px-3 py-2"
-              value={street}
-              onChange={e => setStreet(e.target.value)}
+            <span>Business Phone*:</span>
+            <PhoneInput
+              international
+              defaultCountry="KE"
+              value={businessPhone}
+              onChange={(value) => setBusinessPhone(value || '')}
+              className="mt-1 block w-full"
+              required
             />
           </label>
 
-          <label className="block">
-            <span>Town:</span>
-            <input
-              type="text"
-              className="mt-1 w-full border rounded px-3 py-2"
-              value={town}
-              onChange={e => setTown(e.target.value)}
-            />
-          </label>
-
-          <label className="block">
-            <span>County / State:</span>
-            <input
-              type="text"
-              className="mt-1 w-full border rounded px-3 py-2"
-              value={county}
-              onChange={e => setCounty(e.target.value)}
-            />
-          </label>
-
+          {/* Business Fields */}
           <label className="block">
             <span>Business Name*:</span>
             <input

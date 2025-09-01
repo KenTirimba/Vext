@@ -17,6 +17,7 @@ interface Booking {
   addons?: Record<string, number>;
   clientPhone?: string;
   clientName?: string;
+  shortId?: string; // ✅ added
 }
 
 interface Video {
@@ -93,8 +94,8 @@ export default function CreatorBookings() {
     const mapsLink = booking.provider?.location ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(booking.provider.location)}` : '';
 
     const message = booking.status === 'accepted'
-      ? `Hi ${booking.client.name}, your booking #${booking.id} has been ACCEPTED by ${providerName} for ${dateStr} at ${timeStr}. Location: ${locationDetails}. Map: ${mapsLink}`
-      : `Hi ${booking.client.name}, your booking #${booking.id} has been REJECTED by ${providerName}.`;
+      ? `Hi ${booking.client.name}, your booking #${booking.shortId || booking.id} has been ACCEPTED by ${providerName} for ${dateStr} at ${timeStr}. Location: ${locationDetails}. Map: ${mapsLink}`
+      : `Hi ${booking.client.name}, your booking #${booking.shortId || booking.id} has been REJECTED by ${providerName}.`;
 
     await fetch('/api/send-sms', {
       method: 'POST',
@@ -115,7 +116,6 @@ export default function CreatorBookings() {
       prev.map((b) => (b.id === id ? { ...b, status } : b))
     );
 
-    // Only send SMS to client on accept or reject
     if (status === 'accepted' || status === 'rejected') {
       await sendClientSMS({ ...booking, status });
     }
@@ -141,7 +141,8 @@ export default function CreatorBookings() {
               <p className="text-gray-700">{b.video.details}</p>
             </>
           )}
-          <p className="mt-2"><strong>Client:</strong> {b.client?.name || b.clientId}</p>
+          <p className="mt-2"><strong>Booking ID:</strong> {b.shortId || b.id}</p>
+          <p><strong>Client:</strong> {b.client?.name || b.clientId}</p>
           <p><strong>Date:</strong> {new Date(b.date).toLocaleDateString()}</p>
           <p><strong>Time:</strong> {b.time}</p>
           <p><strong>Total:</strong> KSHS {b.total}</p>
