@@ -6,7 +6,11 @@ if (!admin.apps.length) {
     ? process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n")
     : undefined;
 
-  if (!process.env.FIREBASE_PROJECT_ID || !process.env.FIREBASE_CLIENT_EMAIL || !privateKey) {
+  if (
+    !process.env.FIREBASE_PROJECT_ID ||
+    !process.env.FIREBASE_CLIENT_EMAIL ||
+    !privateKey
+  ) {
     throw new Error("Missing Firebase service account credentials in environment variables.");
   }
 
@@ -19,6 +23,7 @@ if (!admin.apps.length) {
   });
 }
 
-// 👇 keep the same export names your code was already using
+// 👇 exports
 export const adminDb = admin.firestore();
 export const adminAuth = admin.auth();
+export const initAdmin = admin; // ✅ added so your route import works

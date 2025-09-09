@@ -287,9 +287,12 @@ export default function VideoFeed() {
 
   // ✅ share handler
   const handleShare = (video: VideoDoc) => {
-    const link = `${window.location.origin}/video/${video.videoId || video.id}`;
+    const link = `${window.location.origin}/video/${video.id}`;
     navigator.clipboard.writeText(link).then(() => {
       alert('Link copied to clipboard!');
+    }).catch(err => {
+     console.error("Failed to copy link: ", err);
+      alert('❌ Could not copy link');  
     });
   };
 
@@ -343,6 +346,13 @@ export default function VideoFeed() {
                     Edit Profile
                   </button>
 
+                  <button
+                    onClick={() => { router.push('/messages'); setDropdownOpen(false); }}
+                    className="block w-full px-2 py-1 hover:bg-gray-700 rounded mb-1"
+                  >
+                    Messages
+                  </button>
+                  
                   <button onClick={handleSignOut} className="block w-full px-2 py-1 hover:bg-gray-700 rounded text-red-400">
                     Sign Out
                   </button>

@@ -14,9 +14,11 @@ import {
 } from 'firebase/firestore';
 import { db, auth } from '@/lib/firebase';
 import { useAuthState } from 'react-firebase-hooks/auth';
+import MessageButton from '@/components/MessageButton';
 
 interface UserProfile {
   username?: string;
+  fullName?: string;
   profilePhoto?: string;
   isServiceProvider?: boolean;
   businessName?: string;
@@ -99,7 +101,7 @@ export default function CreatorProfilePage() {
         )}
         <div>
           <h1 className="text-2xl font-bold">
-            {profile.businessName || `@${profile.username || 'unknown'}`}
+            {profile.businessName || profile.fullName || `@${profile.username || 'unknown'}`}
           </h1>
           <p className="text-sm text-gray-300">
             by @{profile.username || 'unknown'}
@@ -110,18 +112,27 @@ export default function CreatorProfilePage() {
             {followersCount} follower{followersCount !== 1 ? 's' : ''}
           </p>
 
-          {/* Follow button */}
+          {/* Action buttons */}
           {user?.uid !== userId && (
-            <button
-              onClick={handleFollow}
-              className={`mt-2 px-4 py-1 rounded ${
-                isFollowing
-                  ? 'bg-gray-600 text-white'
-                  : 'bg-blue-500 hover:bg-blue-600 text-white'
-              }`}
-            >
-              {isFollowing ? 'Following' : 'Follow'}
-            </button>
+            <div className="flex space-x-2 mt-2">
+              <button
+                onClick={handleFollow}
+                className={`px-4 py-1 rounded ${
+                  isFollowing
+                    ? 'bg-gray-600 text-white'
+                    : 'bg-blue-500 hover:bg-blue-600 text-white'
+                }`}
+              >
+                {isFollowing ? 'Following' : 'Follow'}
+              </button>
+
+              {/* ✅ Pass userId so /messages knows which convo to open */}
+              <MessageButton
+                currentUserId={user?.uid}
+                otherUserId={userId}
+                redirectToList
+              />
+            </div>
           )}
 
           {profile.servicesProvided && (
